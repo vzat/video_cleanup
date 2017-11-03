@@ -71,7 +71,7 @@ class Video:
 
         outVid.release()
 
-    def denoise(self, temporalWindowSize = 1):
+    def denoise(self, temporalWindowSize = 3):
         newFrames = []
         # for frameNo in xrange(temporalWindowSize / 2 + 95, len(self.frames) - temporalWindowSize / 2):
         #     print frameNo
@@ -88,12 +88,73 @@ class Video:
 
         self.frames = newFrames
 
+    def getYUV(self):
+        yuvFrames = []
+        yFrames = []
+        for frame in self.frames:
+            newFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+            yuvFrames.append(newFrame)
+            yFrames.append(newFrame[:, :, 0])
+
+        return (yuvFrames, yFrames)
+
+    def getBGR(self, yuvFrames):
+        bgrFrames = []
+        for frame in yuvFrames:
+            newFrame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
+            bgrFrames.append(newFrame)
+
+        return bgrFrames
+
+    def eqHist(self, frame, minI, maxI):
+        return 255 * ((frame - minI) / (maxI - minI))
+
+    def normalise(self, windowSize = 5):
+        (yuvFrames, yFrames) = self.getYUV()
+
+        for frameNo, frame in enumerate(yFrames):
+            startFrame = frameNo - windowSize / 2
+            endFrame = frameNo + windowSize / 2
+
+            # Make sure frames are within bounds
+            if startFrame < 0:
+                startFrame = 0
+            if endFrame >= len(yFrames):
+                endFrame = len(yFrames) - 1
+
+            windowFrames = yFrames[startFrame:endFrame]
+
+            # Find the mean of the frames in the window
+            meanFrames = []
+            for wFrame in windowFrames:
+                mean = np.mean(wFrame)
+                meanFrames.append(mean)
+
+            # Find closest frame to the mean of the window
+            meanWindow = np.mean(meanFrames)
+            difMean = abs(meanWindow - meanFrames[0])
+            bestFrameNo = 0
+            for meanFrameNo, meanFrame in enumerate(meanFrames):
+                if abs(meanWindow - meanFrame) < difMean:
+                    difMean = abs(meanWindow - meanFrame)
+                    bestFrameNo = meanFrameNo
+
+            bestFrame = yFrames[bestFrameNo]
+            (minVal, maxVal, _, _) = cv2.minMaxLoc(bestFrame)
+
+            newY = self.eqHist(frame, minVal, maxVal)
+            yuvFrames[frameNo][:, :, 0] = newY
+
+        self.frames = self.getBGR(yuvFrames)
 
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
 video = Video(inputFile)
+print 'Denoising'
 video.denoise()
+print 'Normalising'
+video.normalise()
 video.display(compare = True)
 
 # frame = video.frames[99]
