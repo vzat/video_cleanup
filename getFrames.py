@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+from matplotlib import pyplot as plt
+from matplotlib import image as image
 import easygui
 
 # print cv2.getBuildInformation()
@@ -26,6 +28,29 @@ def getFilePath(filename):
         filePath = filename[: slashPos + 1]
 
     return filePath
+
+def eqHist(img):
+    (height, width) = img.shape[:2]
+    yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+    (minI, maxI, _, _) = cv2.minMaxLoc(yuv[:, :, 0])
+
+    yuv[:, :, 0] = 255 * ((yuv[:, :, 0] - minI) / (maxI - minI))
+
+    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+
+def readVideo(path):
+    inVid = cv2.VideoCapture(path)
+
+    fps = inVid.get(cv2.CAP_PROP_FPS)
+
+    frames = []
+    validFrame, frame = inVid.read()
+    while validFrame:
+        frames.append(frame)
+        validFrame, frame = inVid.read()
+    inVid.release()
+
+    return frames
 
 # TODO use easygui
 inputPath = 'videos/'
@@ -57,15 +82,27 @@ inVid = cv2.VideoCapture(inputFile)
 #     validFrame, frame = inVid.read()
 # outVid.release()
 
-
+video = readVideo(inputFile)
+cv2.imshow('Frame', video[99])
+cv2.waitKey(0)
 
 # Read 100th frame
-for i in range(100):
-    retval, frame = inVid.read()
-if retval:
-    # TODO Do something with the image, use functions
-    cv2.imshow('Frame', frame)
-    cv2.waitKey(0)
+# for i in range(100):
+#     retval, frame = inVid.read()
+# if retval:
+#     # TODO Do something with the image, use functions
+#     # cv2.imshow('Frame', frame)
+#
+#     # TODO Get a common brightness between all the frames
+#     newFrame = eqHist(frame)
+#     cv2.imshow('EqFrame', newFrame)
+#     values = frame.ravel()
+#     values2 = newFrame.ravel()
+#     hist = plt.hist(x = values, bins = 256, range = [0, 256])
+#     nHist = plt.hist(x = values2, bins = 256, range = [0, 256])
+#     # plt.show(hist)
+#     # plt.show(nHist)
+#     cv2.waitKey(0)
 
-inVid.release()
+# inVid.release()
 cv2.destroyAllWindows()
