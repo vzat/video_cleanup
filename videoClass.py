@@ -107,6 +107,7 @@ class Video:
         return bgrFrames
 
     def eqHist(self, frame, minI, maxI):
+        # Constrast Stretching
         return 255 * ((frame - minI) / (maxI - minI))
 
     def normalise(self, windowSize = 5):
@@ -147,17 +148,70 @@ class Video:
 
         self.frames = self.getBGR(yuvFrames)
 
+    def sharpen(self):
+        newFrames = []
+        for frame in self.frames:
+            # Reference: http://web.pdx.edu/~jduh/courses/Archive/geog481w07/Students/Ludwig_ImageConvolution.pdf
+            # kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
+            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype = float)
+            frame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
+            newFrames.append(frame)
+
+        self.frames = newFrames
+
+    def gammaCorrection(self):
+        # Reference: http://www.normankoren.com/makingfineprints1A.html#Gammabox
+        newFrames = []
+        for frame in self.frames:
+            gamma = 2
+            normalisedFrame = frame / 255.0
+            enhancedFrame = normalisedFrame ** (1 / gamma)
+            newFrame = enhancedFrame * 255
+            newFrames.append(newFrame)
+        self.frames = newFrames
+
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
 video = Video(inputFile)
-print 'Denoising'
-video.denoise()
-print 'Normalising'
-video.normalise()
-video.display(compare = True)
+# print 'Denoising'
+# video.denoise()
+# print 'Normalising'
+# video.normalise()
+# video.display(compare = True)
 
-# frame = video.frames[99]
+def eqHist(img):
+    (height, width) = img.shape[:2]
+    yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+    luminance = yuv[:, :, 0]
+    (minI, maxI, _, _) = cv2.minMaxLoc(luminance)
+
+    newLuminance = luminance.copy()
+    for x in range(width):
+        for y in range(height):
+            newLuminance[y, x] = 255.0 * float(luminance[y, x] - minI) / float(maxI - minI)
+            print luminance[y, x], newLuminance[y, x]
+
+    yuv[:, :, 0] = newLuminance
+    cv2.imshow('new', newLuminance)
+    cv2.waitKey(0)
+
+    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+
+frame = video.frames[50]
+# eqHist(frame)
+# frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+# newFrame = cv2.equalizeHist(frame)
+# newFrame = frame.copy()
+# newFrame = cv2.normalize(frame, newFrame, 0.0, 255.0, cv2.NORM_MINMAX)
+# values = newFrame.ravel()
+# hist = plt.hist(x = values, bins = 256, range = [0, 256])
+# plt.show(hist)
+
+# video.sharpen()
+video.gammaCorrection()
+video.display(compare = True)
+# cv2.imshow('Frame', frame)
 
 # # CLARHE normalisation
 # # Reference: https://stackoverflow.com/questions/24341114/simple-illumination-correction-in-images-opencv-c
