@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 from matplotlib import pyplot as plt
 from matplotlib import image as image
-import easygui
+# import easygui
 
 class Video:
     def __init__(self, file):
@@ -15,8 +15,8 @@ class Video:
         # Get video metadata
         self.fourcc = int(inVid.get(cv2.CAP_PROP_FOURCC))
         self.fps = inVid.get(cv2.CAP_PROP_FPS)
-        self.widthVid = int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.heightVid = int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.width = int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # Read Frames
         self.rawFrames = []
@@ -64,7 +64,7 @@ class Video:
 
     def write(self, name):
         filename = self.path + name + self.extension
-        outVid = cv2.VideoWriter(filename, self.fourcc, self.fps, (self.widthVid, self.heightVid))
+        outVid = cv2.VideoWriter(filename, self.fourcc, self.fps, (self.width, self.height))
 
         for frame in self.frames:
             outVid.write(frame)
@@ -155,50 +155,205 @@ class Video:
             # kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
             kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype = float)
             frame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
+            frame = cv2.medianBlur(frame, 3)
             newFrames.append(frame)
 
         self.frames = newFrames
 
-    def gammaCorrection(self):
-        # Reference: http://www.normankoren.com/makingfineprints1A.html#Gammabox
-        newFrames = []
-        for frame in self.frames:
-            gamma = 2
-            normalisedFrame = frame / 255.0
-            enhancedFrame = normalisedFrame ** (1 / gamma)
-            newFrame = enhancedFrame * 255
-            newFrames.append(newFrame)
-        self.frames = newFrames
+    def removeArtifacts(self):
+        # WIP
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            gSecondFrame = cv2.cvtColor(secondFrame, cv2.COLOR_BGR2GRAY)
+            diffs = cv2.absdiff(gFirstFrame, gSecondFrame)
+
+            # INPAINT_NS or INPAINT_TELEA
+            cv2.inpaint(src = firstFrame, inpaintMask = diffs, inpaintRadius = 1, flags = cv2.INPAINT_NS)
+
+            cv2.imshow('Diffs', diffs)
+            cv2.waitKey(0)
+
+    def getMatches(self, img1, img2):
+        orb = cv2.ORB_create()
+        kp1, desc1 = orb.detectAndCompute(img1, None)
+        kp2, desc2 = orb.detectAndCompute(img2, None)
+
+        bf = cv2.BFMatcher(normType = cv2.NORM_HAMMING, crossCheck = True)
+        matches = bf.match(desc1, desc2)
+        matches = sorted(matches, key = lambda match:match.distance)
+
+        matchedCoordinates = []
+        for match in matches:
+            keyPoint1 = kp1[match.queryIdx]
+            keyPoint2 = kp2[match.trainIdx]
+
+            currentMatch = {
+                'pt1': {
+                    'x': keyPoint1.pt[0],
+                    'y': keyPoint1.pt[1]
+                },
+                'pt2': {
+                    'x': keyPoint2.pt[0],
+                    'y': keyPoint2.pt[1]
+                },
+                'distance': match.distance
+            }
+
+            matchedCoordinates.append(currentMatch)
+
+        return matchedCoordinates
+
+    def stabilise(self):
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            gSecondFrame = cv2.cvtColor(secondFrame, cv2.COLOR_BGR2GRAY)
+            gFirstFrame = cv2.bilateralFilter(gFirstFrame, 9, 75, 75)
+            gSecondFrame = cv2.bilateralFilter(gSecondFrame, 9, 75, 75)
+
+            matches = self.getMatches(gFirstFrame, gSecondFrame)
+            # matches = self.getMatches(firstFrame, secondFrame)
+            match = matches[0]
+
+            # TODO Maybe use the average of the first 5 - 10 matches??
+            xDif = int(round(match['pt1']['x'] - match['pt2']['x']))
+            yDif = int(round(match['pt1']['y'] - match['pt2']['y']))
+
+            if abs(np.std(gFirstFrame) - np.std(gSecondFrame)) > 5:
+                xDif = 0
+                yDif = 0
+
+            if xDif > 50 or yDif > 50 or xDif < -50 or yDif < -50:
+                xDif = 0
+                yDif = 0
+
+            # Image has shifted
+            if xDif != 0 or yDif != 0:
+                newFrame = np.zeros((self.height, self.width, 3), np.uint8)
+
+                if xDif < 0:
+                    startOldX = - xDif
+                    endOldX = self.width
+                    startNewX = 0
+                    endNewX = self.width + xDif
+                else:
+                    startOldX = 0
+                    endOldX = self.width - xDif
+                    startNewX = xDif
+                    endNewX = self.width
+
+                if yDif < 0:
+                    startOldY = - yDif
+                    endOldY = self.height
+                    startNewY = 0
+                    endNewY = self.height + yDif
+                else:
+                    startOldY = 0
+                    endOldY = self.height - yDif
+                    startNewY = yDif
+                    endNewY = self.height
+
+                print xDif, yDif
+                newFrame[startNewY : endNewY, startNewX : endNewX] = secondFrame[startOldY : endOldY, startOldX : endOldX]
+            else:
+                newFrame = secondFrame.copy()
+
+            self.frames[frameNo + 1] = newFrame
+
+            if frameNo % 100 == 0:
+                print int(float(frameNo) / len(self.frames) * 100.0), '%'
+
+    # def smartSharpen(self):
+    #     # Reference: https://www.gimp.org/tutorials/Smart_Sharpening/
+    #     newFrames = []
+    #     for frame in self.frames:
+    #         gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #         gFrame = cv2.bilateralFilter(gFrame, 9, 75, 75)
+    #
+    #         # Find edges
+    #         threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    #         cannyImg = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+    #
+    #         # Make the edges thicker
+    #         # shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    #         # cannyImg = cv2.morphologyEx(cannyImg, cv2.MORPH_CLOSE, shape)
+    #
+    #         rCannyImg = cv2.bitwise_not(cannyImg)
+    #         roi = cv2.bitwise_and(frame, frame, mask = cannyImg)
+    #         bg = cv2.bitwise_and(frame, frame, mask = rCannyImg)
+    #
+    #         # Sharpen edges
+    #         # kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype = float)
+    #         # roi = cv2.filter2D(roi, ddepth = -1, kernel = kernel)
+    #
+    #         # Combine images
+    #         # newFrame = cv2.addWeighted(frame, 0.3, roi, 0.7, 0)
+    #         newFrame = cv2.bitwise_or(bg, roi)
+    #
+    #         newFrames.append(newFrame)
+    #         # cv2.imshow('dsa', newFrams)
+    #         # cv2.waitKey(0)
+    #     self.frames = newFrames
+
+    # def removeGraininess(self):
+    #     newFrames = []
+    #     for frame in self.frames:
+    #         # yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+    #         kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype = float)
+    #         frame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
+    #         newFrames.append(frame)
+    #
+    #     self.frames = newFrames
+
+    # def morph(self):
+    #     # Doesn't do much
+    #     newFrames = []
+    #     for frame in self.frames:
+    #         shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    #         # frame = cv2.erode(frame, shape)
+    #         # frame = cv2.dilate(frame, shape)
+    #         # frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, shape)
+    #         frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, shape)
+    #         shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    #         frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, shape)
+    #         newFrames.append(frame)
+    #     self.frames = newFrames
+
+    # def gammaCorrection(self):
+    #     # Reference: http://www.normankoren.com/makingfineprints1A.html#Gammabox
+    #     newFrames = []
+    #     for frame in self.frames:
+    #         gamma = 2
+    #         normalisedFrame = frame / 255.0
+    #         enhancedFrame = normalisedFrame ** (1 / gamma)
+    #         newFrame = enhancedFrame * 255
+    #         newFrames.append(newFrame)
+    #     self.frames = newFrames
 
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
 video = Video(inputFile)
+# video.removeGraininess()
+# video.morph()
+# video.removeArtifacts()
+video.stabilise()
+# video.sharpen()
+video.display(compare = True)
+video.write('output')
 # print 'Denoising'
 # video.denoise()
 # print 'Normalising'
 # video.normalise()
 # video.display(compare = True)
 
-def eqHist(img):
-    (height, width) = img.shape[:2]
-    yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-    luminance = yuv[:, :, 0]
-    (minI, maxI, _, _) = cv2.minMaxLoc(luminance)
-
-    newLuminance = luminance.copy()
-    for x in range(width):
-        for y in range(height):
-            newLuminance[y, x] = 255.0 * float(luminance[y, x] - minI) / float(maxI - minI)
-            print luminance[y, x], newLuminance[y, x]
-
-    yuv[:, :, 0] = newLuminance
-    cv2.imshow('new', newLuminance)
-    cv2.waitKey(0)
-
-    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
-
-frame = video.frames[50]
+# video.sharpen()
+# frame = video.frames[50]
 # eqHist(frame)
 # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 # newFrame = cv2.equalizeHist(frame)
@@ -209,8 +364,17 @@ frame = video.frames[50]
 # plt.show(hist)
 
 # video.sharpen()
-video.gammaCorrection()
-video.display(compare = True)
+# video.gammaCorrection()
+# video.display(compare = True)
+# frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+# gamma = 1.0
+# normalisedFrame = frame / 255.0
+# enhancedFrame = normalisedFrame ** (1.0 / gamma)
+# newFrame = enhancedFrame * 255.0
+
+# shape = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+# frame = cv2.erode(frame, shape)
+# frame = cv2.dilate(frame, shape)
 # cv2.imshow('Frame', frame)
 
 # # CLARHE normalisation
