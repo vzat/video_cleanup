@@ -83,7 +83,12 @@ class Video:
         #     cv2.waitKey(0)
 
         for frame in self.frames:
-            newFrame = cv2.fastNlMeansDenoising(src = frame, h = 3, templateWindowSize = 7, searchWindowSize = 7)
+            # yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+            # y = yuv[:, :, 0]
+            # newY = cv2.fastNlMeansDenoising(src = y, h = 3, templateWindowSize = 7, searchWindowSize = 21)
+            # yuv[:, :, 0] = newY
+            # newFrame = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+            newFrame = cv2.fastNlMeansDenoisingColored(src = frame, h = 3, templateWindowSize = 5, searchWindowSize = 5)
             newFrames.append(newFrame)
 
         self.frames = newFrames
@@ -162,19 +167,30 @@ class Video:
 
     def removeArtifacts(self):
         # WIP
+        newFrames = [self.frames[0]]
         for frameNo in range(len(self.frames) - 1):
             firstFrame = self.frames[frameNo]
             secondFrame = self.frames[frameNo + 1]
 
             gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
             gSecondFrame = cv2.cvtColor(secondFrame, cv2.COLOR_BGR2GRAY)
-            diffs = cv2.absdiff(gFirstFrame, gSecondFrame)
+            gFirstFrame = cv2.bilateralFilter(gFirstFrame, 9, 75, 75)
+            gSecondFrame = cv2.bilateralFilter(gSecondFrame, 9, 75, 75)
+
+            # diffs = cv2.absdiff(gFirstFrame, gSecondFrame)
+            diffs = gSecondFrame - gFirstFrame
+            diffs[diffs < 127] = 0
+            # print np.mean(diffs)
 
             # INPAINT_NS or INPAINT_TELEA
-            cv2.inpaint(src = firstFrame, inpaintMask = diffs, inpaintRadius = 1, flags = cv2.INPAINT_NS)
+            if np.mean(diffs) < 10:
+                newFrame = cv2.inpaint(src = secondFrame, inpaintMask = diffs, inpaintRadius = 3, flags = cv2.INPAINT_NS)
+            else:
+                newFrame = secondFrame.copy()
 
-            cv2.imshow('Diffs', diffs)
-            cv2.waitKey(0)
+            newFrames.append(newFrame)
+
+        self.frames = newFrames
 
     def getMatches(self, img1, img2):
         orb = cv2.ORB_create()
@@ -218,17 +234,29 @@ class Video:
 
             matches = self.getMatches(gFirstFrame, gSecondFrame)
             # matches = self.getMatches(firstFrame, secondFrame)
-            match = matches[0]
+            # match = matches[0]
+            # print cv2.estimateRigidTransform(firstFrame, secondFrame, False)[0]
 
             # TODO Maybe use the average of the first 5 - 10 matches??
-            xDif = int(round(match['pt1']['x'] - match['pt2']['x']))
-            yDif = int(round(match['pt1']['y'] - match['pt2']['y']))
+            # xDif = int(round(match['pt1']['x'] - match['pt2']['x']))
+            # yDif = int(round(match['pt1']['y'] - match['pt2']['y']))
+
+            noMatches = 10.0
+            totalX = totalY = 0
+            for matchIndex in range(int(noMatches)):
+                if matchIndex < len(matches):
+                    match = matches[matchIndex]
+                    totalX += int(round(match['pt1']['x'] - match['pt2']['x']))
+                    totalY += int(round(match['pt1']['y'] - match['pt2']['y']))
+
+            xDif = int(round(totalX / noMatches))
+            yDif = int(round(totalY / noMatches))
 
             if abs(np.std(gFirstFrame) - np.std(gSecondFrame)) > 5:
                 xDif = 0
                 yDif = 0
 
-            if xDif > 50 or yDif > 50 or xDif < -50 or yDif < -50:
+            if abs(xDif) > 20 or abs(yDif) > 20:
                 xDif = 0
                 yDif = 0
 
@@ -341,11 +369,12 @@ inputFile = inputPath + 'Zorro.mp4'
 video = Video(inputFile)
 # video.removeGraininess()
 # video.morph()
-# video.removeArtifacts()
-video.stabilise()
+# video.stabilise()
+video.removeArtifacts()
 # video.sharpen()
+# video.denoise()
 video.display(compare = True)
-video.write('output')
+# video.write('output')
 # print 'Denoising'
 # video.denoise()
 # print 'Normalising'
