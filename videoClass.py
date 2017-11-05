@@ -296,6 +296,110 @@ class Video:
             if frameNo % 100 == 0:
                 print int(float(frameNo) / len(self.frames) * 100.0), '%'
 
+
+    # def getAvgMovement(self, corners):
+    #     avgX = 0
+    #     avgY = 0
+    #     for corner in corners:
+    #         avgX += corner[0][0]
+    #         avgY += corner[0][1]
+    #     avgX /= len(corners)
+    #     avgY /= len(corners)
+    #
+    #     return (avgX, avgY)
+    #
+    # def getMovement(self, corners, newCorners):
+    #     (avgX, avgY) = self.getAvgMovement(corners)
+    #     (newAvgX, newAvgY) = self.getAvgMovement(newCorners)
+    #
+    #     return (int(round(avgX - newAvgX)), int(round(avgY - newAvgY)))
+
+    # def opticalFlow(self):
+    #     frame = self.frames[0]
+    #     gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #     corners = cv2.goodFeaturesToTrack(gFrame, maxCorners = 100, qualityLevel = 0.1, minDistance = 10)
+    #     for frameNo in range(1, len(self.frames) - 1):
+    #         prevFrame = frame
+    #         frame = self.frames[frameNo]
+    #
+    #         gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #
+    #         if frameNo % 5 == 0:
+    #             newCorners = cv2.goodFeaturesToTrack(gFrame, maxCorners = 100, qualityLevel = 0.1, minDistance = 10)
+    #             (xDif, yDif) = self.getMovement(corners, newCorners)
+    #             corners = newCorners
+    #         else:
+    #             newCorners = corners
+    #             newCorners, _, _ = cv2.calcOpticalFlowPyrLK(prevImg = prevFrame, nextImg = frame, prevPts = corners, nextPts = newCorners)
+    #             (xDif, yDif) = self.getMovement(corners, newCorners)
+    #             corners = newCorners
+    #
+    #         # Image has shifted
+    #         if xDif != 0 or yDif != 0:
+    #             newFrame = np.zeros((self.height, self.width, 3), np.uint8)
+    #
+    #             if xDif < 0:
+    #                 startOldX = - xDif
+    #                 endOldX = self.width
+    #                 startNewX = 0
+    #                 endNewX = self.width + xDif
+    #             else:
+    #                 startOldX = 0
+    #                 endOldX = self.width - xDif
+    #                 startNewX = xDif
+    #                 endNewX = self.width
+    #
+    #             if yDif < 0:
+    #                 startOldY = - yDif
+    #                 endOldY = self.height
+    #                 startNewY = 0
+    #                 endNewY = self.height + yDif
+    #             else:
+    #                 startOldY = 0
+    #                 endOldY = self.height - yDif
+    #                 startNewY = yDif
+    #                 endNewY = self.height
+    #
+    #             print xDif, yDif
+    #             newFrame[startNewY : endNewY, startNewX : endNewX] = frame[startOldY : endOldY, startOldX : endOldX]
+    #         else:
+    #             newFrame = frame.copy()
+    #
+    #         self.frames[frameNo] = newFrame
+
+            # for corner in corners:
+            #     x = corner[0][0]
+            #     y = corner[0][1]
+            #     cv2.circle(frame, (x, y), 3, 255, -1)
+
+
+            # gFirstFrame = cv2.medianBlur(gFirstFrame, 5)
+            # gSecondFrame = cv2.medianBlur(gFirstFrame, 5)
+
+            # threshold, _ = cv2.threshold(src = gFirstFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            # cannyImg = cv2.Canny(image = gFirstFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+            #
+            # _, contours, _ = cv2.findContours(image = cannyImg.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+            #
+            # newFrame = np.zeros((self.height, self.width, 1), np.uint8)
+            # for contour in contours:
+            #     # hull = cv2.convexHull(contour)
+            #     arcPercentage = 0.1
+            #     epsilon = cv2.arcLength(curve = contour, closed = True) * arcPercentage
+            #     corners = cv2.approxPolyDP(curve = contour, epsilon = epsilon, closed = True)
+            #     # if cv2.contourArea(hull) < 3:
+            #     cv2.drawContours(newFrame, corners, -1, 255, 3)
+
+
+            # for corner in corners:
+            #     x = corner[0][0]
+            #     y = corner[0][1]
+            #     cv2.circle(firstFrame, (x, y), 3, 255, -1)
+
+            # cv2.imshow('Image', frame)
+            # cv2.waitKey(0)
+
+
     # def smartSharpen(self):
     #     # Reference: https://www.gimp.org/tutorials/Smart_Sharpening/
     #     newFrames = []
@@ -331,12 +435,79 @@ class Video:
     # def removeGraininess(self):
     #     newFrames = []
     #     for frame in self.frames:
-    #         # yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
-    #         kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype = float)
-    #         frame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
-    #         newFrames.append(frame)
+    #         # gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #         bFrame = cv2.bilateralFilter(frame,9,75,75)
+    #
+    #         # kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype = float)
+    #         # mask = cv2.filter2D(gFrame, ddepth = -1, kernel = kernel)
+    #
+    #         # # INPAINT_NS or INPAINT_TELEA
+    #         # newFrame = cv2.inpaint(src = frame, inpaintMask = mask, inpaintRadius = 1, flags = cv2.INPAINT_TELEA)
+    #
+    #         newFrames.append(bFrame)
     #
     #     self.frames = newFrames
+
+    def phaseCorrelate(self):
+        # Reference: https://docs.opencv.org/2.4/modules/imgproc/doc/motion_analysis_and_object_tracking.html#phasecorrelate
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            gSecondFrame = cv2.cvtColor(secondFrame, cv2.COLOR_BGR2GRAY)
+            gFirstFrame = cv2.medianBlur(gFirstFrame, 9)
+            gSecondFrame = cv2.medianBlur(gSecondFrame, 9)
+
+            threshold, _ = cv2.threshold(src = gFirstFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            gFirstFrame = cv2.Canny(image = gFirstFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            threshold, _ = cv2.threshold(src = gSecondFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            gSecondFrame = cv2.Canny(image = gSecondFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            # Convert to CV_32FC1
+            gFirstFrame32 = np.float32(gFirstFrame)
+            gSecondFrame32 = np.float32(gSecondFrame)
+
+            (xDif, yDif), _ = cv2.phaseCorrelate(src1 = gFirstFrame32, src2 = gSecondFrame32)
+
+            xDif = int(round(-xDif))
+            yDif = int(round(-yDif))
+
+            # Image has shifted
+            if xDif != 0 or yDif != 0:
+                newFrame = np.zeros((self.height, self.width, 3), np.uint8)
+
+                if xDif < 0:
+                    startOldX = - xDif
+                    endOldX = self.width
+                    startNewX = 0
+                    endNewX = self.width + xDif
+                else:
+                    startOldX = 0
+                    endOldX = self.width - xDif
+                    startNewX = xDif
+                    endNewX = self.width
+
+                if yDif < 0:
+                    startOldY = - yDif
+                    endOldY = self.height
+                    startNewY = 0
+                    endNewY = self.height + yDif
+                else:
+                    startOldY = 0
+                    endOldY = self.height - yDif
+                    startNewY = yDif
+                    endNewY = self.height
+
+                print xDif, yDif
+                newFrame[startNewY : endNewY, startNewX : endNewX] = secondFrame[startOldY : endOldY, startOldX : endOldX]
+            else:
+                newFrame = secondFrame.copy()
+
+            self.frames[frameNo + 1] = newFrame
+
+            if frameNo % 100 == 0:
+                print int(float(frameNo) / len(self.frames) * 100.0), '%'
 
     # def morph(self):
     #     # Doesn't do much
@@ -370,10 +541,13 @@ video = Video(inputFile)
 # video.removeGraininess()
 # video.morph()
 # video.stabilise()
-video.removeArtifacts()
+# video.removeArtifacts()
 # video.sharpen()
 # video.denoise()
-video.display(compare = True)
+# video.opticalFlow()
+# video.display()
+video.phaseCorrelate()
+video.display()
 # video.write('output')
 # print 'Denoising'
 # video.denoise()
