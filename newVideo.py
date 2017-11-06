@@ -270,6 +270,30 @@ class Video:
             cv2.imshow('Downscaled Frame', newFrame)
             cv2.waitKey(0)
 
+    def foregroundMask(self):
+        bsMOG = cv2.bgsegm.createBackgroundSubtractorMOG()
+        # bsMOG2 = cv2.createBackgroundSubtractorMOG2()
+        # bsGMG = cv2.bgsegm.createBackgroundSubtractorGMG()
+        for frame in self.frames:
+            mask = bsMOG.apply(frame)
+            cv2.imshow('Mask', mask)
+            cv2.waitKey(0)
+
+    def getScenes(self):
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            gSecondFrame = cv2.cvtColor(secondFrame, cv2.COLOR_BGR2GRAY)
+
+            mse = np.mean((gFirstFrame - gSecondFrame) ** 2)
+
+            if mse > 50:
+                cv2.imshow('Frame', gFirstFrame)
+                cv2.waitKey(0)
+
+
     def stabilise(self):
         # Reference: https://docs.opencv.org/2.4/modules/imgproc/doc/motion_analysis_and_object_tracking.html#phasecorrelate
         for frameNo in range(len(self.frames) - 1):
@@ -318,7 +342,7 @@ video = Video(inputFile)
 # video.normalise()
 # video.stabilise()
 # video.newDenoise()
-video.testSharpen()
+video.getScenes()
 
 # frame = video.frames[107]
 
