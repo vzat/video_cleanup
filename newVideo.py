@@ -105,6 +105,63 @@ class Video:
             # frame = cv2.medianBlur(frame, 3)
             self.frames[frameNo] = frame
 
+    # Not working that well
+    def newDenoise(self):
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            bFirstFrame = cv2.medianBlur(gFirstFrame, 9)
+
+            difs = gFirstFrame - bFirstFrame
+
+            _, contours, _ = cv2.findContours(image = difs.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+
+            # contours = sorted(contours, key = lambda contour:cv2.contourArea(contour))
+
+            mask = np.zeros((self.height, self.width, 1), np.uint8)
+            for contour in contours:
+                area = cv2.contourArea(contour)
+
+                if area < 10:
+                    cv2.drawContours(mask, contour, -1, 255, 2)
+
+            # cv2.imshow('Mask', mask)
+            # cv2.waitKey(0)
+
+            rmask = cv2.bitwise_not(mask)
+
+            firstROI = cv2.bitwise_and(firstFrame, firstFrame, mask = rmask)
+            secondROI = cv2.bitwise_and(secondFrame, secondFrame, mask = mask)
+
+            self.frames[frameNo] = cv2.bitwise_or(firstROI, secondROI)
+
+    def superResolution(self):
+        for frameNo in range(len(self.frames) - 2):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+            frame3 = self.frames[frameNo + 2]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+            gFrame3 = cv2.cvtColor(frame3, cv2.COLOR_BGR2GRAY)
+
+            iFrame = np.zeros((self.height, self.width, 1), np.uint8)
+            for x in range(self.width):
+                for y in range(self.height):
+                    minPixel = min(gFrame1[y, x], gFrame3[y, x])
+                    iFrame[y, x] = minPixel + (abs(gFrame1[y, x] - gFrame3[y, x]) / 2)
+
+            # comparedFrames = np.hstack((iFrame, gFrame2))
+            newFrame = cv2.subtract(gFrame2, iFrame)
+
+            cv2.imshow('Comp', newFrame)
+            cv2.waitKey(0)
+
+    def newSuperResolution(self):
+        sr = superres.superResolution()
+
     def testLab(self):
         for frameNo, frame in enumerate(self.frames):
             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab)
@@ -112,6 +169,54 @@ class Video:
             (minI, maxI, _, _) = cv2.minMaxLoc(l)
             lab[:, :, 0] = 255 * ((l - minI) / (maxI - minI))
             self.frames[frameNo] = cv2.cvtColor(lab, cv2.COLOR_Lab2BGR)
+
+    def removeArtifacts(self):
+        for frameNo in range(len(self.frames) - 1):
+            firstFrame = self.frames[frameNo]
+            secondFrame = self.frames[frameNo + 1]
+
+            gFirstFrame = cv2.cvtColor(firstFrame, cv2.COLOR_BGR2GRAY)
+            _, thImg = cv2.threshold(src = gFirstFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+            _, contours, _ = cv2.findContours(image = thImg.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+
+            mask = np.zeros((self.height, self.width, 1), np.uint8)
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                x, y, w, h = cv2.boundingRect(points = contour)
+                # if abs(w - h) < 50:
+                cv2.drawContours(mask, contour, -1, 255, 20)
+
+            rmask = cv2.bitwise_not(mask)
+
+            bg = cv2.bitwise_and(firstFrame, firstFrame, mask = rmask)
+            roi = cv2.bitwise_and(secondFrame, secondFrame, mask = mask)
+
+            newFrame = cv2.bitwise_or(bg, roi)
+            self.frames[frameNo] = newFrame.copy()
+
+            # cv2.imshow('bg', newFrame)
+            # cv2.waitKey()
+
+    def newRemoveArtifacts(self):
+        for frameNo in range(len(self.frames) - 2):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+            frame3 = self.frames[frameNo + 2]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+            gFrame3 = cv2.cvtColor(frame3, cv2.COLOR_BGR2GRAY)
+
+            dif1 = gFrame2 - gFrame1
+            dif2 = gFrame2 - gFrame3
+
+            diffs = dif1 - dif2
+
+            cv2.imshow('Diffs', diffs)
+            # cv2.imshow('Dif1', dif1)
+            # cv2.imshow('Dif2', dif2)
+            cv2.waitKey(0)
 
     def stabilise(self):
         # Reference: https://docs.opencv.org/2.4/modules/imgproc/doc/motion_analysis_and_object_tracking.html#phasecorrelate
@@ -157,8 +262,25 @@ inputFile = inputPath + 'Zorro.mp4'
 video = Video(inputFile)
 
 # video.stretchHist();
-video.sharpen()
-video.normalise()
+# video.sharpen()
+# video.normalise()
 video.stabilise()
+# video.newDenoise()
+video.newRemoveArtifacts()
+
+# frame = video.frames[107]
+
+# gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+# bFrame = cv2.medianBlur(gFrame, 9)
+# bFrame = gFrame.copy()
+#
+# threshold, thImg = cv2.threshold(src = bFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+# cannyImg = cv2.Canny(image = bFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+#
+# cv2.imshow('Threshold', thImg)
+# cv2.waitKey(0)
+# cv2.imshow('Canny', cannyImg)
+
+
 video.display(compare = True)
 cv2.waitKey(0)
