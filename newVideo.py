@@ -211,11 +211,63 @@ class Video:
             dif1 = gFrame2 - gFrame1
             dif2 = gFrame2 - gFrame3
 
-            diffs = dif1 - dif2
+            dif1[dif1 > 127] = 255
+            dif1[dif1 < 128] = 0
+
+            dif2[dif2 > 127] = 255
+            dif2[dif2 < 128] = 0
+
+            diffs = cv2.bitwise_and(dif1, dif2)
 
             cv2.imshow('Diffs', diffs)
             # cv2.imshow('Dif1', dif1)
             # cv2.imshow('Dif2', dif2)
+            cv2.waitKey(0)
+
+    def blobDetector(self):
+        blobDetector = cv2.SimpleBlobDetector_create()
+
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            gFrame = cv2.Canny(image = gFrame.copy(), threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            gFrame = cv2.morphologyEx(gFrame, cv2.MORPH_CLOSE, shape)
+
+            keyPoints = blobDetector.detect(gFrame)
+            print len(keyPoints)
+
+            frame = cv2.drawKeypoints(frame, keyPoints, -1, (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+            cv2.imshow('Frame', frame)
+            cv2.waitKey(0)
+
+    def testSharpen(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            oFrame = gFrame.copy()
+            gFrame = cv2.medianBlur(gFrame, 9)
+
+            scale = 0.5
+            downScaledFrame = cv2.resize(src = gFrame, dsize = (0, 0), fx = scale, fy = scale, interpolation = cv2.INTER_AREA)
+
+            threshold, _ = cv2.threshold(src = downScaledFrame.copy(), thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame = cv2.Canny(image = downScaledFrame.copy(), threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            upScaledCanny = cv2.resize(src = cannyFrame, dsize = (0, 0), fx = 1 / scale, fy = 1 / scale, interpolation = cv2.INTER_CUBIC)
+            rCanny = cv2.bitwise_not(upScaledCanny)
+
+
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
+            sFrame = cv2.filter2D(oFrame, ddepth = -1, kernel = kernel)
+
+            bg = cv2.bitwise_and(oFrame, oFrame, mask = rCanny)
+            roi = cv2.bitwise_and(sFrame, sFrame, mask = upScaledCanny)
+
+            newFrame = cv2.bitwise_or(bg, roi)
+
+            cv2.imshow('Downscaled Frame', newFrame)
             cv2.waitKey(0)
 
     def stabilise(self):
@@ -264,9 +316,9 @@ video = Video(inputFile)
 # video.stretchHist();
 # video.sharpen()
 # video.normalise()
-video.stabilise()
+# video.stabilise()
 # video.newDenoise()
-video.newRemoveArtifacts()
+video.testSharpen()
 
 # frame = video.frames[107]
 
