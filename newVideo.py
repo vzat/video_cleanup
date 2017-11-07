@@ -331,6 +331,31 @@ class Video:
             if frameNo % 100 == 0:
                 print int(float(frameNo) / len(self.frames) * 100.0), '%'
 
+    def newNewDenoise(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            scale = 0.25
+            downscaledFrame = cv2.resize(src = gFrame, dsize = (0, 0), fx = scale, fy = scale, interpolation = cv2.INTER_AREA)
+
+            newFrame = cv2.fastNlMeansDenoising(downscaledFrame)
+            mask = newFrame - downscaledFrame
+
+            upscaledMask = cv2.resize(src = mask, dsize = (self.width, self.height), interpolation = cv2.INTER_CUBIC)
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            upscaledMask = cv2.erode(upscaledMask, shape)
+
+            rmask = cv2.bitwise_not(upscaledMask)
+
+            secondFrame = cv2.cvtColor(self.frames[frameNo + 1], cv2.COLOR_BGR2GRAY)
+            bg = cv2.bitwise_and(gFrame, gFrame, mask = rmask)
+            roi = cv2.bitwise_and(secondFrame, secondFrame, mask = upscaledMask)
+
+            denoisedFrame = cv2.bitwise_or(bg, roi)
+
+            cv2.imshow('Denoise', denoisedFrame)
+            cv2.waitKey(0)
+
 
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
@@ -342,7 +367,7 @@ video = Video(inputFile)
 # video.normalise()
 # video.stabilise()
 # video.newDenoise()
-video.getScenes()
+video.newNewDenoise()
 
 # frame = video.frames[107]
 
