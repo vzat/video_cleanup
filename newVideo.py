@@ -88,7 +88,7 @@ class Video:
             self.frames[frameNo] = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
 
     def normalise(self):
-        clahe = cv2.createCLAHE(clipLimit=2.0)
+        clahe = cv2.createCLAHE(clipLimit=1.1)
         for frameNo, frame in enumerate(self.frames):
             yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
             luminance = yuv[:, :, 0]
@@ -356,6 +356,131 @@ class Video:
             cv2.imshow('Denoise', denoisedFrame)
             cv2.waitKey(0)
 
+    def newNewNewDenoise(self):
+        for frameNo in range(1, len(self.frames) - 2):
+            prevFrame = self.frames[frameNo - 1]
+            frame = self.frames[frameNo]
+            nextFrame = self.frames[frameNo + 1]
+
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            scale = 0.25
+            downscaledFrame = cv2.resize(src = gFrame, dsize = (0, 0), fx = scale, fy = scale, interpolation = cv2.INTER_AREA)
+
+            newFrame = cv2.fastNlMeansDenoising(downscaledFrame)
+            mask = newFrame - downscaledFrame
+
+            upscaledMask = cv2.resize(src = mask, dsize = (self.width, self.height), interpolation = cv2.INTER_CUBIC)
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            upscaledMask = cv2.erode(upscaledMask, shape)
+
+            rmask = cv2.bitwise_not(upscaledMask)
+
+            if np.mean(prevFrame) < np.mean(nextFrame):
+                otherFrame = cv2.cvtColor(prevFrame, cv2.COLOR_BGR2GRAY)
+            else:
+                otherFrame = cv2.cvtColor(nextFrame, cv2.COLOR_BGR2GRAY)
+
+            bg = cv2.bitwise_and(gFrame, gFrame, mask = rmask)
+            roi = cv2.bitwise_and(otherFrame, otherFrame, mask = upscaledMask)
+
+            denoisedFrame = cv2.bitwise_or(bg, roi)
+
+            cv2.imshow('Denoise', denoisedFrame)
+            cv2.waitKey(0)
+
+    def anotherTest(self):
+        for frameNo, frame in enumerate(self.frames):
+            # filteredFrame = cv2.edgePreservingFilter(frame, flags = cv2.RECURS_FILTER, sigma_s = 100, sigma_r = 0.5)
+            # detailEnhanced = cv2.detailEnhance(src = frame, sigma_s = 10, sigma_r = 0.5)
+
+            cv2.imshow('Filtered', detailEnhanced)
+            cv2.waitKey(0)
+
+    def kalmanFilter(self):
+        kalman = cv2.KalmanFilter()
+
+    def goodFeatures(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            corners = cv2.goodFeaturesToTrack(gFrame, maxCorners = 100, qualityLevel = 0.1, minDistance = 10)
+            mask = np.zeros((self.height, self.width, 1), np.uint8)
+            for corner in corners:
+                mask[int(corner[0][1]), int(corner[0][0])] = 255
+
+            cv2.imshow('Frame', mask)
+            cv2.waitKey(0)
+
+    def newForegroundMask(self):
+        for frameNo, frame in enumerate(self.frames):
+            bFrame = cv2.medianBlur(frame, 9)
+
+            gFrame = cv2.cvtColor(bFrame, cv2.COLOR_BGR2GRAY)
+
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            cannyFrame = cv2.dilate(cannyFrame, shape)
+            rCannyFrame = cv2.bitwise_not(cannyFrame)
+
+            bg = cv2.bitwise_and(bFrame, bFrame, mask = rCannyFrame)
+            roi = cv2.bitwise_and(frame, frame, mask = cannyFrame)
+
+            newFrame = cv2.bitwise_or(bg, roi)
+
+            self.frames[frameNo] = newFrame.copy()
+
+            # cv2.imshow('Canny', newFrame)
+            # cv2.waitKey(0)
+
+    def denoise(self):
+        for frameNo, frame in enumerate(self.frames):
+            bFrame = cv2.medianBlur(frame, 9)
+
+            gFrame = cv2.cvtColor(bFrame, cv2.COLOR_BGR2GRAY)
+
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            # Make the detail more pronounced
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            cannyFrame = cv2.dilate(cannyFrame, shape)
+
+            rCannyFrame = cv2.bitwise_not(cannyFrame)
+
+            # Blurred background
+            bg = cv2.bitwise_and(bFrame, bFrame, mask = rCannyFrame)
+
+            # Detail
+            roi = cv2.bitwise_and(frame, frame, mask = cannyFrame)
+
+            self.frames[frameNo] = cv2.bitwise_or(bg, roi)
+
+    def enhanceDetail(self):
+        for frameNo, frame in enumerate(self.frames):
+            bFrame = cv2.medianBlur(frame, 9)
+
+            gFrame = cv2.cvtColor(bFrame, cv2.COLOR_BGR2GRAY)
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            # Make the details more pronounced
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+            cannyFrame = cv2.dilate(cannyFrame, shape)
+            rCannyFrame = cv2.bitwise_not(cannyFrame)
+
+            # Blur background to denoise it
+            bg = cv2.bitwise_and(bFrame, bFrame, mask = rCannyFrame)
+
+            # Reference: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
+            sharpenedFrame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
+
+            # Detail
+            roi = cv2.bitwise_and(sharpenedFrame, sharpenedFrame, mask = cannyFrame)
+
+            self.frames[frameNo] = cv2.bitwise_or(bg, roi)
 
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
@@ -363,11 +488,14 @@ inputFile = inputPath + 'Zorro.mp4'
 video = Video(inputFile)
 
 # video.stretchHist();
-# video.sharpen()
-# video.normalise()
+
 # video.stabilise()
+# video.sharpen()
 # video.newDenoise()
-video.newNewDenoise()
+# video.newForegroundMask()
+# video.denoise()
+video.enhanceDetail()
+# video.normalise()
 
 # frame = video.frames[107]
 
