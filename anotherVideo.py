@@ -12,17 +12,24 @@ class Video:
 
         # Refernce - https://docs.opencv.org/3.2.0/d4/d15/group__videoio__flags__base.html#gaeb8dd9c89c10a5c63c139bf7c4f5704
         # Get video metadata
-        self.fourcc = int(inVid.get(cv2.CAP_PROP_FOURCC))
+        # self.fourcc = int(inVid.get(cv2.CAP_PROP_FOURCC))
+        self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.fps = inVid.get(cv2.CAP_PROP_FPS)
         self.width = int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        startFrame = 100
+        endFrame = startFrame + 10
+        frameNo = 0
 
         # Read Frames
         self.rawFrames = []
         validFrame, frame = inVid.read()
         while validFrame:
-            self.rawFrames.append(frame)
+            if frameNo > startFrame and frameNo < endFrame:
+                self.rawFrames.append(frame)
             validFrame, frame = inVid.read()
+            frameNo += 1
         inVid.release()
 
         self.frames = self.rawFrames[:]
@@ -59,6 +66,7 @@ class Video:
         if dotPos != -1 and dotPos < len(filename) - 1:
             extension = filename[dotPos :]
 
+        extension = '.avi'
         return extension
 
     def write(self, name):
@@ -144,14 +152,57 @@ class Video:
 
             self.frames[frameNo] = cv2.bitwise_or(bg, roi)
 
+    def findWatermark(self):
+        diffs = []
+        for frameNo in range(len(self.frames) - 1):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+
+            diffs.append(cv2.absdiff(frame1, frame2))
+            cv2.imshow('mask', diffs[frameNo])
+            cv2.waitKey(0)
+
+        watermarkMask = diffs[0]
+        for diff in diffs:
+            watermarkMask = cv2.bitwise_and(watermarkMask, diff)
+
+        cv2.imshow('Watermark', watermarkMask)
+        cv2.waitKey(0)
+
+    def fourier(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # TODO NO https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_transforms/py_fourier_transform/py_fourier_transform.html
+            ctp = cv2.cartToPolar(gFrame, (self.width / 2, self.height / 2), 1)
+
+            cv2.imshow('Fourier', ctp)
+            cv2.waitKey(0)
+
+    def denoise(self):
+        temporalWindowSize = 3
+        totalFrames = len(self.frames)
+        for frameNo in range(temporalWindowSize / 2):
+            cv2.fastNlMeansDenoisingColored(self.frames[frameNo])
+
+        for frameNo in range(totalFrames - temporalWindowSize / 2, totalFrames):
+            cv2.fastNlMeansDenoisingColored(self.frames[frameNo])
+
+        for frameNo in range(temporalWindowSize / 2, totalFrames - temporalWindowSize / 2):
+            newFrame = cv2.fastNlMeansDenoisingColoredMulti(srcImgs = self.frames, imgToDenoiseIndex = frameNo, temporalWindowSize = temporalWindowSize)
+            self.frames[frameNo] = newFrame
+            print frameNo
+
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
 video = Video(inputFile)
 
-video.stretchHist()
-video.stabilise()
-video.enhanceDetail()
+# video.stretchHist()
+# video.stabilise()
+# video.denoise()
+# video.enhanceDetail()
 
-video.display(compare = True)
+# video.display(compare = True)
+video.write('shortZorro')
 cv2.waitKey(0)
