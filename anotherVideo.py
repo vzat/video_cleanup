@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 from matplotlib import pyplot as plt
 from matplotlib import image as image
+from skimage import color, data, restoration
 
 class Video:
     def __init__(self, file):
@@ -18,16 +19,16 @@ class Video:
         self.width = int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        startFrame = 100
-        endFrame = startFrame + 10
+        # startFrame = 100
+        # endFrame = startFrame + 10
         frameNo = 0
 
         # Read Frames
         self.rawFrames = []
         validFrame, frame = inVid.read()
         while validFrame:
-            if frameNo > startFrame and frameNo < endFrame:
-                self.rawFrames.append(frame)
+            # if frameNo > startFrame and frameNo < endFrame:
+            self.rawFrames.append(frame)
             validFrame, frame = inVid.read()
             frameNo += 1
         inVid.release()
@@ -136,16 +137,26 @@ class Video:
             cannyFrame = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
 
             # Make the details more pronounced
-            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
             cannyFrame = cv2.dilate(cannyFrame, shape)
             rCannyFrame = cv2.bitwise_not(cannyFrame)
 
             # Blur background to denoise it
             bg = cv2.bitwise_and(bFrame, bFrame, mask = rCannyFrame)
 
+            scale = 2
+            upscaledFrame = cv2.resize(src = frame, dsize = (0, 0), fx = scale, fy = scale, interpolation = cv2.INTER_CUBIC)
+            # frame = upscaledFrame.copy()
+
             # Reference: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf
-            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
+            # kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype = float)
+            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype = float)
+            # kernel = np.array([[-2, -1, -0], [-1, 1, 1], [0, 1, 2]], dtype = float)
             sharpenedFrame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
+            sharpenedFrame = cv2.GaussianBlur(sharpenedFrame, (5, 5), 0)
+
+            # sharpenedFrame = cv2.resize(src = sharpenedFrame, dsize = (self.width, self.height), interpolation = cv2.INTER_AREA)
+            # sharpenedFrame = frame.copy()
 
             # Detail
             roi = cv2.bitwise_and(sharpenedFrame, sharpenedFrame, mask = cannyFrame)
@@ -193,16 +204,136 @@ class Video:
             self.frames[frameNo] = newFrame
             print frameNo
 
+    def motionSensor(self):
+        for frameNo in range(len(self.frames) - 2):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+            frame3 = self.frames[frameNo + 2]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+            gFrame3 = cv2.cvtColor(frame3, cv2.COLOR_BGR2GRAY)
+
+            diff1 = cv2.absdiff(gFrame2, gFrame1)
+            diff2 = cv2.absdiff(gFrame2, gFrame3)
+
+            diff = cv2.bitwise_xor(diff1, diff2)
+
+            cv2.imshow('Diff', diff)
+            cv2.waitKey(0)
+
+    def detectNoise(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            bFrame = cv2.medianBlur(gFrame, 9)
+
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            gCannyFrame = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            threshold, _ = cv2.threshold(src = bFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            bCannyFrame = cv2.Canny(image = bFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            gCannyFrame = cv2.dilate(gCannyFrame, shape)
+
+            bCannyFrame = cv2.dilate(bCannyFrame, shape)
+
+            dif = gCannyFrame - bCannyFrame
+
+            _, contours, _ = cv2.findContours(image = dif.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+            cv2.drawContours(frame, contours, -1, (0, 0, 255), 3)
+
+            # dif = cv2.absdiff(gCannyFrame, bCannyFrame)
+
+            cv2.imshow('Dif', frame)
+            cv2.waitKey(0)
+
+    def testOpticalFlow(self):
+        for frameNo in range(len(self.frames) - 1):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+            # flow = gFrame1.copy()
+            flow = cv2.calcOpticalFlowFarneback(prev = gFrame1, next = gFrame2, flow = None, pyr_scale = 0.4, levels = 1, winsize = 12, iterations = 2, poly_n = 8, poly_sigma = 1.2, flags = cv2.OPTFLOW_FARNEBACK_GAUSSIAN)
+
+            for f in flow[0]:
+                print f
+
+            cv2.imshow('Flow', flow)
+            cv2.waitKey(0)
+
+    def compContours(self):
+        for frameNo in range(len(self.frames) - 1):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+            bFrame1 = cv2.medianBlur(gFrame1, 9)
+            bFrame2 = cv2.medianBlur(gFrame2, 9)
+
+            threshold, _ = cv2.threshold(src = bFrame1, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame1 = cv2.Canny(image = bFrame1, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            threshold, _ = cv2.threshold(src = bFrame2, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame2 = cv2.Canny(image = bFrame2, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            _, contours1, _ = cv2.findContours(image = cannyFrame1.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+            _, contours2, _ = cv2.findContours(image = cannyFrame2.copy(), mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_NONE)
+
+            mask = np.zeros((self.height, self.width, 1), np.uint8)
+            for contour1 in contours1:
+                for contour2 in contours2:
+                    ret = cv2.matchShapes(contour1, contour2, 1, 0.0)
+                    if ret > 0:
+                        cv2.drawContours(mask, contour1, -1, 255, 1)
+
+            threshold, _ = cv2.threshold(src = gFrame1, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyFrame1 = cv2.Canny(image = gFrame1, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            dif = cv2.subtract(cannyFrame1, mask)
+
+            cv2.imshow('Frame', cannyFrame1)
+            cv2.waitKey(0)
+
+    def removeBGRects(self):
+        for frameNo, frame in enumerate(self.frames):
+            shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, shape)
+            self.frames[frameNo] = frame
+
+    def similarities(self):
+        for frameNo in range(len(self.frames) - 1):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+
+            sim = cv2.bitwise_and(frame1, frame2)
+            sim[sim < 200] = 0
+            sim[sim > 199] = 255
+
+            cv2.imshow('Sim', sim)
+            cv2.waitKey(0)
+
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
 video = Video(inputFile)
 
 # video.stretchHist()
-# video.stabilise()
+video.stabilise()
 # video.denoise()
 # video.enhanceDetail()
+# video.removeBGRects()
+# video.normalise()
 
-# video.display(compare = True)
-video.write('shortZorro')
+# video.detectNoise()
+# video.testOpticalFlow()
+# video.compContours()
+
+video.display(compare = True)
+# video.write('softSharp')
 cv2.waitKey(0)
