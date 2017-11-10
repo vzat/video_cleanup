@@ -124,9 +124,8 @@
 #   [3] OpenCV 3.2.0 Documentation, 2016, [Online].
 #       Available: https://docs.opencv.org/3.2.0/d7/df3/group__imgproc__motion.html#ga552420a2ace9ef3fb053cd630fdb4952.
 #       [Accessed: 2017-11-09]
-#   [4] OpenCV 3.2.0 Tutorials, 2016, [Online].
-#       Available: https://docs.opencv.org/3.2.0/da/d6e/tutorial_py_geometric_transformations.html.
-#       [Accessed: 2017-11-09]
+#   [4] R.Szeliski, 'Feature-based alignment' in 'Computer Vision: Algorithms and Applications',
+#       2010, Springer, p. 312
 #   [5] Sharpening Filters, [Online].
 #       Available: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf.
 #       [Accessed: 2017-11-09]
