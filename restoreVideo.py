@@ -141,7 +141,6 @@ class Video:
 
         inVid = cv2.VideoCapture(file)
 
-        # Refernce - https://docs.opencv.org/3.2.0/d4/d15/group__videoio__flags__base.html#gaeb8dd9c89c10a5c63c139bf7c4f5704
         # Get video metadata
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.fps = inVid.get(cv2.CAP_PROP_FPS)
@@ -243,7 +242,6 @@ class Video:
             # Blur background to denoise it
             bg = cv2.bitwise_and(bFrame, bFrame, mask = rCannyFrame)
 
-            # Reference: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf
             # Sharpen details
             kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype = float)
             sharpenedFrame = cv2.filter2D(frame, ddepth = -1, kernel = kernel)
@@ -255,7 +253,6 @@ class Video:
             self.frames[frameNo] = cv2.bitwise_or(bg, roi)
 
     def stabilise(self):
-        # Reference: https://docs.opencv.org/2.4/modules/imgproc/doc/motion_analysis_and_object_tracking.html#phasecorrelate
         print 'Stabilising Video'
         for frameNo in range(len(self.frames) - 1):
             firstFrame = self.frames[frameNo]
@@ -279,7 +276,6 @@ class Video:
             # Find the translation between the two frames
             (xDif, yDif), _ = cv2.phaseCorrelate(src1 = gSecondFrame32, src2 = gFirstFrame32)
 
-            # Reference: https://docs.opencv.org/3.2.0/da/d6e/tutorial_py_geometric_transformations.html
             translationMatrix = np.float32([[1, 0, xDif], [0, 1, yDif]])
             newFrame = cv2.warpAffine(secondFrame, translationMatrix, (self.width, self.height))
 
