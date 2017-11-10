@@ -17,8 +17,8 @@
 #       1.1 Extract video metadata
 #           * The codec (fourcc), fps, width and height [1] of the video are
 #             needed to be able to write the video in its original form
-#           * Because most codecs are causing problems on Windows, the fourcc
-#             has been set to 'XVID'
+#           * Because most codecs and extensions are causing problems on Windows,
+#             the fourcc has been set to 'XVID' and the extension used is '.avi'
 #       1.2 Append the frames to a list
 #   2. Stretch Contrast
 #       2.1 Extract luminance from frame
@@ -62,9 +62,57 @@
 #             to match the first image
 #           * The frame is updated so the next pair uses the stabilised frame
 #   4. Enhance Details and Denoise
+#       4.1 Blur frame
+#           * This is used for both edge detection and denoising
+#           * The frame is blurred using medianBlur which reduces noise considerably
+#             while preserving edges
+#       4.2 Find edges
+#           * Extract the edges using Canny, using the same method as in 3.3
+#           * As these edges are extracted from a denoised image, it should
+#             contain only the important details of the image
+#       4.3 Emphasise details
+#           * Closing the mask created in the previous step using a round shape
+#           * This makes the details more pronounced
+#       4.4 Extract background from the blurred frame
+#           * Using a reverse mask from the previous step a denoised background
+#             is extracted
+#       4.5 Sharpen the original frame
+#           * The original frame is sharpened by convolving the frame with a
+#             hard sharpening kernel
+#           * The kernel is created by combining a Laplacian mask with the
+#             the original image [5]
+#           * This enhances the details but increases the noise
+#       4.6 Blur the sharpen image
+#           * The sharpened image is blurred using a Gaussian Blur
+#           * The Gaussian Blur is useful for reducing the Gaussian noise
+#             created by sharpening the image
+#           * This will keep the details enhanced while reducing the extra noise
+#       4.7 Extract the edges from the sharpen image
+#           * Only the edges of the sharpened frame are extracted as the rest
+#             of the frame would be deteriorated
+#       4.8 Combine the modified background and edges together
+#           * Combine the denoised background with the sharpened edges to create
+#             a denoised frame while emphasising the important details
 #   5. Write the video
 #
+#   Extra Notes:
+#       * While some of the functions described above could be combined
+#         which would improve performance, they have been separated to improve
+#         the readability of the code
+#       * The enhanceDetail() functions has not been split as blurring is an
+#         expensive operation which would increase the processing time considerably
+#
 #   Experiments:
+#       * Use an adaptive normalisation to improve the quality of the frames.
+#         This was done using CLAHE. While it make the persons and objects in
+#         the video more clear, it deteriorates the frames too much to be used.
+#       * Use Optical Flow to find moving objects. This would help in
+#         separating the background and foreground. Because there are several
+#         scenes in the video and because there are not enough frames it didn't
+#         provide better results than single frame processing
+#       * Use a Fast Non-Local Means Denoising. There are several functions
+#         for this included in OpenCV. While it does slightly improve the image
+#         quality is takes too much time to process a frame to be usable.
 #
 #   References:
 #   [1] OpenCV 3.2.0 Documentation, 2016, [Online].
@@ -79,8 +127,9 @@
 #   [4] OpenCV 3.2.0 Tutorials, 2016, [Online].
 #       Available: https://docs.opencv.org/3.2.0/da/d6e/tutorial_py_geometric_transformations.html.
 #       [Accessed: 2017-11-09]
-
-
+#   [5] Sharpening Filters, [Online].
+#       Available: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf.
+#       [Accessed: 2017-11-09]
 
 import numpy as np
 import cv2
