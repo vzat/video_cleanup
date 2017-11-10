@@ -217,7 +217,7 @@ class Video:
             self.frames[frameNo] = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
 
     def normalise(self):
-        clahe = cv2.createCLAHE(clipLimit=1.1)
+        clahe = cv2.createCLAHE(clipLimit=1.05)
         for frameNo, frame in enumerate(self.frames):
             yuv = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
             luminance = yuv[:, :, 0]
@@ -365,6 +365,32 @@ class Video:
             cv2.imshow('Dif', dif)
             cv2.waitKey(0)
 
+    def opticalFlow(self):
+        for frameNo in range(len(self.frames) - 1):
+            frame1 = self.frames[frameNo]
+            frame2 = self.frames[frameNo + 1]
+
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            gFrame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+            corners = cv2.goodFeaturesToTrack(gFrame1, maxCorners = 1000, qualityLevel = 0.05, minDistance = 25)
+
+            newCorners, _, _ = cv2.calcOpticalFlowPyrLK(prevImg = frame1, nextImg = frame2, prevPts = corners, nextPts = None)
+
+            for newCorner in newCorners:
+                cv2.circle(frame2, (newCorner[0][0], newCorner[0][1]), 3, (0, 0, 255), -1)
+
+            corners = cv2.goodFeaturesToTrack(gFrame1, maxCorners = 1000, qualityLevel = 0.05, minDistance = 25)
+            for corner in corners:
+                cv2.circle(frame2, (corner[0][0], corner[0][1]), 3, (0, 255, 0), -1)
+
+            cv2.imshow('Frame', frame2)
+            cv2.waitKey(0)
+
+    def newRemoveArtifacts(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+
 
 # TODO: Replace with easygui
 inputPath = 'videos/'
@@ -375,11 +401,13 @@ video = Video(inputFile)
 
 # Process Video
 # video.stretchHist()
-video.stabilise()
+# video.stabilise()
 # video.enhanceDetail()
-video.getArtifacts()
+# video.getArtifacts()
+# video.normalise()
+video.opticalFlow()
 
-video.display(compare = true)
+video.display(compare = True)
 
 # Write File
 # video.write('Restored_' + video.originalName)
