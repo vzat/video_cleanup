@@ -133,6 +133,7 @@
 
 import numpy as np
 import cv2
+import easygui
 
 class Video:
     def __init__(self, file):
@@ -281,9 +282,8 @@ class Video:
 
             self.frames[frameNo + 1] = newFrame
 
-# TODO: Replace with easygui
-inputPath = 'videos/'
-inputFile = inputPath + 'Zorro.mp4'
+# Open file
+inputFile = easygui.fileopenbox()
 
 # Read file
 video = Video(inputFile)
