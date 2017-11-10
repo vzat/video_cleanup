@@ -285,10 +285,13 @@ class Video:
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
 
+# Read file
 video = Video(inputFile)
 
+# Process Video
 video.stretchHist()
 video.stabilise()
 video.enhanceDetail()
 
+# Write File
 video.write('Restored_' + video.originalName)
