@@ -124,9 +124,8 @@
 #   [3] OpenCV 3.2.0 Documentation, 2016, [Online].
 #       Available: https://docs.opencv.org/3.2.0/d7/df3/group__imgproc__motion.html#ga552420a2ace9ef3fb053cd630fdb4952.
 #       [Accessed: 2017-11-09]
-#   [4] OpenCV 3.2.0 Tutorials, 2016, [Online].
-#       Available: https://docs.opencv.org/3.2.0/da/d6e/tutorial_py_geometric_transformations.html.
-#       [Accessed: 2017-11-09]
+#   [4] R.Szeliski, 'Feature-based alignment' in 'Computer Vision: Algorithms and Applications',
+#       2010, Springer, p. 312
 #   [5] Sharpening Filters, [Online].
 #       Available: https://bohr.wlu.ca/hfan/cp467/12/notes/cp467_12_lecture6_sharpening.pdf.
 #       [Accessed: 2017-11-09]
@@ -391,6 +390,39 @@ class Video:
         for frameNo, frame in enumerate(self.frames):
             gFrame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
 
+    def normaliseBG(self):
+        for frameNo in range(len(self.frames) - 1):
+            frame = self.frames[frameNo + 1]
+            prevFrame = self.frames[frameNo]
+
+            noBlocksWidth = 100
+            noBlocksHeight = 50
+
+            x = 0
+            y = 0
+            blockWidth = self.width / noBlocksWidth
+            blockHeight = self.height / noBlocksHeight
+
+            while y + blockHeight < self.height:
+                prevBlock = prevFrame[y : y + blockHeight, x : x + blockWidth]
+                block = frame[y : y + blockHeight, x : x + blockWidth]
+
+                prevMean = np.mean(prevBlock)
+                mean = np.mean(block)
+
+                # print prevMean, mean
+                if abs(mean - prevMean) < 5:
+                    frame[y : y + blockHeight, x : x + blockWidth] = prevBlock
+
+                x += blockWidth
+
+                if x + blockWidth > self.width:
+                    x = 0
+                    y += blockHeight
+
+            cv2.imshow('Frame', frame)
+            cv2.waitKey(0)
+
 
 # TODO: Replace with easygui
 inputPath = 'videos/'
@@ -401,11 +433,11 @@ video = Video(inputFile)
 
 # Process Video
 # video.stretchHist()
-# video.stabilise()
+video.stabilise()
 # video.enhanceDetail()
 # video.getArtifacts()
 # video.normalise()
-video.opticalFlow()
+video.normaliseBG()
 
 video.display(compare = True)
 
