@@ -281,6 +281,91 @@ class Video:
 
             self.frames[frameNo + 1] = newFrame
 
+    def contourGradient(self):
+        for frameNo, frame in enumerate(self.frames):
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            threshold, _ = cv2.threshold(src = gFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            cannyEdges = cv2.Canny(image = gFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+
+            dx = cv2.Sobel(gFrame, ddepth = cv2.CV_64F, dx=1, dy=0)
+            dy = cv2.Sobel(gFrame, ddepth = cv2.CV_64F, dx=0, dy=1)
+            dx = cv2.convertScaleAbs(dx)
+            dy = cv2.convertScaleAbs(dy)
+
+            sobel = cv2.addWeighted(dx, 0.5, dy, 0.5, 0)
+
+            mask = np.zeros((self.height, self.width, 1), np.uint8)
+            for x in range(self.width):
+                for y in range(self.height):
+                    angle = np.pi + np.arctan2(-dy[y][x], -dx[y][x])
+                    mask[y][x] = 255.0 * (angle / (2 * np.pi))
+
+            cv2.imshow('Sobel', mask)
+            cv2.waitKey(0)
+
+    def getArtifacts(self):
+        for frameNo in range(1, len(self.frames) - 1):
+            prevFrame = self.frames[frameNo - 1]
+            frame = self.frames[frameNo]
+            nextFrame = self.frames[frameNo + 1]
+
+            gFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gNextFrame = cv2.cvtColor(nextFrame, cv2.COLOR_BGR2GRAY)
+            gPrevFrame = cv2.cvtColor(prevFrame, cv2.COLOR_BGR2GRAY)
+
+            bFrame = cv2.medianBlur(gFrame, 3)
+            bNextFrame = cv2.medianBlur(gNextFrame, 3)
+            bPrevFrame = cv2.medianBlur(gPrevFrame, 3)
+
+            dx = cv2.Sobel(bFrame, ddepth = cv2.CV_64F, dx=1, dy=0)
+            dy = cv2.Sobel(bFrame, ddepth = cv2.CV_64F, dx=0, dy=1)
+            dx = cv2.convertScaleAbs(dx)
+            dy = cv2.convertScaleAbs(dy)
+            sobel = cv2.addWeighted(dx, 0.5, dy, 0.5, 0)
+
+            dx = cv2.Sobel(bNextFrame, ddepth = cv2.CV_64F, dx=1, dy=0)
+            dy = cv2.Sobel(bNextFrame, ddepth = cv2.CV_64F, dx=0, dy=1)
+            dx = cv2.convertScaleAbs(dx)
+            dy = cv2.convertScaleAbs(dy)
+            nextSobel = cv2.addWeighted(dx, 0.5, dy, 0.5, 0)
+
+            dx = cv2.Sobel(bPrevFrame, ddepth = cv2.CV_64F, dx=1, dy=0)
+            dy = cv2.Sobel(bPrevFrame, ddepth = cv2.CV_64F, dx=0, dy=1)
+            dx = cv2.convertScaleAbs(dx)
+            dy = cv2.convertScaleAbs(dy)
+            prevSobel = cv2.addWeighted(dx, 0.5, dy, 0.5, 0)
+
+            # threshold, _ = cv2.threshold(src = bFrame, thresh = 0, maxval = 255, type = cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            # cannyEdges = cv2.Canny(image = bFrame, threshold1 = 0.5 * threshold, threshold2 = threshold)
+            # shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+            # cannyEdges = cv2.dilate(cannyEdges, shape)
+
+            # dif = bFrame - gFrame
+            # sim = cv2.bitwise_and(dif, cannyEdges)
+            # dif -= sim
+            # shape = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            # dif = cv2.morphologyEx(dif, cv2.MORPH_OPEN, shape)
+
+            # rDif = cv2.bitwise_not(dif)
+            #
+            # gNextFrame = cv2.cvtColor(nextFrame, cv2.COLOR_BGR2GRAY)
+            # roi = cv2.bitwise_and(gNextFrame, gNextFrame, dif)
+            # bg = cv2.bitwise_and(gFrame, gFrame, rDif)
+            # newFrame = cv2.bitwise_or(bg, roi)
+
+            difSobel = sobel - nextSobel
+            difSobel2 = sobel - prevSobel
+            dif = cv2.bitwise_and(difSobel, difSobel2)
+            dif[dif > 50] = 0
+
+            # INPAINT_NS or INPAINT_TELEA
+            # newFrame = cv2.inpaint(src = frame, inpaintMask = dif, inpaintRadius = 1, flags = cv2.INPAINT_NS)
+
+            cv2.imshow('Dif', dif)
+            cv2.waitKey(0)
+
+
 # TODO: Replace with easygui
 inputPath = 'videos/'
 inputFile = inputPath + 'Zorro.mp4'
@@ -289,9 +374,12 @@ inputFile = inputPath + 'Zorro.mp4'
 video = Video(inputFile)
 
 # Process Video
-video.stretchHist()
+# video.stretchHist()
 video.stabilise()
-video.enhanceDetail()
+# video.enhanceDetail()
+video.getArtifacts()
+
+video.display(compare = true)
 
 # Write File
-video.write('Restored_' + video.originalName)
+# video.write('Restored_' + video.originalName)
